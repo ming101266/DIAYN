@@ -19,7 +19,7 @@ def train(policy, discriminator, env, num_skills, optimizer_policy, optimizer_di
                 action = policy(s_tensor, z_tensor).squeeze(0).numpy()
                 action = np.clip(action, -env.max_step, env.max_step)
 
-            next_state, _, _, _ = env.step(action)
+            next_state = env.step(action)
             buffer.add((next_state.copy(), skill))
             skill_trajectories[skill].append(next_state.copy())
             state = next_state

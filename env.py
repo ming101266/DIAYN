@@ -14,4 +14,4 @@ class Point2DEnv:
         action = np.clip(action, -self.max_step, self.max_step)
         self.state += action
         self.state = np.clip(self.state, -self.bounds, self.bounds)
-        return self.state.copy(), 0, False, {}
+        return self.state.copy()
