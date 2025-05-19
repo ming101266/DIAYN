@@ -1,7 +1,7 @@
 import numpy as np
 
 class Point2DEnv:
-    def __init__(self, max_step=0.1, bounds=1.0):
+    def __init__(self, max_step=0.2, bounds=1.0):
         self.state = None
         self.max_step = max_step
         self.bounds = bounds

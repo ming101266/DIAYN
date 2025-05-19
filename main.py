@@ -17,8 +17,8 @@ def main():
     policy = Policy(state_dim, skill_dim, action_dim)
     discriminator = Discriminator(state_dim, num_skills)
 
-    policy_optim = torch.optim.Adam(policy.parameters(), lr=3e-3)
-    disc_optim = torch.optim.Adam(discriminator.parameters(), lr=1e-3)
+    policy_optim = torch.optim.Adam(policy.parameters(), lr=3e-4)
+    disc_optim = torch.optim.Adam(discriminator.parameters(), lr=9e-4)
 
     buffer = ReplayBuffer()
 
