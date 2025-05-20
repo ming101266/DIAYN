@@ -3,54 +3,129 @@ import torch.nn.functional as F
 from utils import one_hot, to_tensor
 import numpy as np
 
-def train(policy, discriminator, env, num_skills, optimizer_policy, optimizer_disc, buffer, steps=10000):
+def polyak_update(source_net, target_net, tau):
+    for target_param, source_param in zip(target_net.parameters(), source_net.parameters()):
+        target_param.data.copy_(tau * source_param.data + (1.0 - tau) * target_param.data)
+
+def train(
+        policy, discriminator, critic, value_net,
+        critic_target, value_net_target,
+        env, num_skills,
+        optim_policy, optim_disc, optim_critic, optim_value,
+        gamma, tau, alpha, target_entropy,
+        buffer, steps, batch_size=256, max_skill_steps=20,
+        temp=0.5, target_update_interval=2
+    ):
+    log_alpha = torch.tensor(np.log(alpha), requires_grad=True)
+    alpha_optim = torch.optim.Adam([log_alpha], lr=1e-4)
+    
     skill_trajectories = [[] for _ in range(num_skills)]
 
-    for step in range(steps):
-        skill = torch.randint(0, num_skills, (1,)).item()
+    for step_idx in range(steps):
+        # Environment interaction
+        skill = np.random.randint(0, num_skills)
         skill_onehot = one_hot(skill, num_skills)
         state = env.reset()
-
-        for t in range(20):
-            s_tensor = to_tensor(state).unsqueeze(0)
-            z_tensor = skill_onehot.unsqueeze(0).float()
-
+        
+        for t in range(max_skill_steps):
+            state_tensor = to_tensor(state).unsqueeze(0)
+            
             with torch.no_grad():
-                action = policy(s_tensor, z_tensor).squeeze(0).numpy()
+                action_tensor, _ = policy.sample(state_tensor, skill_onehot)
+                action = action_tensor.squeeze(0).cpu().numpy()
                 action = np.clip(action, -env.max_step, env.max_step)
 
             next_state = env.step(action)
-            buffer.add((next_state.copy(), skill))
+            done = (t == max_skill_steps - 1)
+
+            # Intrinsic reward calculation
+            with torch.no_grad():
+                next_state_tensor = to_tensor(next_state).unsqueeze(0)
+                disc_logits = discriminator(next_state_tensor) / temp
+                log_probs = F.log_softmax(disc_logits, dim=1)
+                intrinsic_reward = log_probs[0, skill].item() + np.log(num_skills)
+
+            buffer.add((state, action, intrinsic_reward, next_state, float(done), skill))
             skill_trajectories[skill].append(next_state.copy())
             state = next_state
 
-        if len(buffer.buffer) >= 128:
-            # Sample and convert to tensors
-            states_np, skills_np = buffer.sample(128)
-            states = to_tensor(states_np)
-            skills = torch.tensor(skills_np, dtype=torch.long)
+        # Training update
+        if len(buffer.buffer) < batch_size:
+            continue
 
-            # Discriminator update
-            logits = discriminator(states)
-            loss_disc = F.cross_entropy(logits, skills)
-            optimizer_disc.zero_grad()
-            loss_disc.backward()
-            optimizer_disc.step()
+        # Sample batch
+        states, actions, rewards, next_states, dones, skills = buffer.sample(batch_size)
+        
+        # Convert to tensors
+        states = to_tensor(states)
+        actions = to_tensor(actions)
+        rewards = to_tensor(rewards).unsqueeze(1)
+        next_states = to_tensor(next_states)
+        dones = to_tensor(dones).unsqueeze(1)
+        skills = torch.tensor(skills, dtype=torch.long)
+        skills_onehot = one_hot(skills, num_skills).float()
 
-            # Policy update
-            with torch.no_grad():
-                states_tensor = to_tensor(states_np)
-            
-            logits_for_policy = discriminator(states_tensor)
-            log_probs = F.log_softmax(logits_for_policy, dim=1)
-            intrinsic_reward = log_probs[range(len(skills_np)), skills_np]
+        # 1. Discriminator update
+        disc_logits = discriminator(states)
+        loss_disc = F.cross_entropy(disc_logits, skills)
+        optim_disc.zero_grad()
+        loss_disc.backward()
+        optim_disc.step()
 
-            policy_loss = -intrinsic_reward.mean()
-            optimizer_policy.zero_grad()
-            policy_loss.backward()
-            optimizer_policy.step()
+        # 2. Value network update
+        with torch.no_grad():
+            next_actions, log_probs_next = policy.sample(next_states, skills_onehot)
+            q1_next, q2_next = critic_target(next_states, next_actions, skills_onehot)
+            min_q_next = torch.min(q1_next, q2_next)
+            v_target = min_q_next - log_alpha.exp().detach() * log_probs_next
 
-            if step % 500 == 0:
-                print(f"Step {step}/{steps}, Disc Loss: {loss_disc.item():.3f}, Policy Loss: {policy_loss.item():.3f}")
+        v_pred = value_net(states, skills_onehot)
+        loss_value = F.mse_loss(v_pred, v_target)
+        optim_value.zero_grad()
+        loss_value.backward()
+        optim_value.step()
+
+        # 3. Q-network update
+        with torch.no_grad():
+            v_next = value_net_target(next_states, skills_onehot)
+            q_target = rewards + gamma * (1 - dones) * v_next
+
+        q1_pred, q2_pred = critic(states, actions, skills_onehot)
+        loss_q1 = F.mse_loss(q1_pred, q_target)
+        loss_q2 = F.mse_loss(q2_pred, q_target)
+        loss_q = loss_q1 + loss_q2
+        optim_critic.zero_grad()
+        loss_q.backward()
+        optim_critic.step()
+
+        # 4. Policy update
+        new_actions, log_probs = policy.sample(states, skills_onehot)
+        q1_new, q2_new = critic(states, new_actions, skills_onehot)
+        min_q_new = torch.min(q1_new, q2_new)
+        policy_loss = (log_alpha.exp().detach() * log_probs - min_q_new).mean()
+        optim_policy.zero_grad()
+        policy_loss.backward()
+        optim_policy.step()
+
+        # 5. Alpha update (periodic)
+        if step_idx % target_update_interval == 0:
+            alpha_loss = -(log_alpha * (log_probs.detach() + target_entropy)).mean()
+            alpha_optim.zero_grad()
+            alpha_loss.backward()
+            alpha_optim.step()
+            log_alpha.data = torch.clamp(log_alpha.data, min=np.log(0.01))
+
+            # Target network updates
+            polyak_update(critic, critic_target, tau)
+            polyak_update(value_net, value_net_target, tau)
+
+        # Logging
+        if step_idx % 100 == 0:
+            print(f"Rollout {step_idx}/{steps}, "
+                  f"Disc: {loss_disc.item():.3f}, "
+                  f"Q: {loss_q.item():.3f}, "
+                  f"Value: {loss_value.item():.3f}, "
+                  f"Policy: {policy_loss.item():.3f}, "
+                  f"Alpha: {log_alpha.exp().item():.3f}")
 
     return skill_trajectories

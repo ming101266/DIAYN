@@ -12,5 +12,12 @@ class ReplayBuffer:
     def sample(self, batch_size):
         batch_size = min(batch_size, len(self.buffer))
         batch = random.sample(self.buffer, batch_size)
-        states, skills = zip(*batch)
-        return np.array(states), np.array(skills)
+        states, actions, rewards, next_states, dones, skills = zip(*batch)
+        return (
+            np.array(states),
+            np.array(actions),
+            np.array(rewards),
+            np.array(next_states),
+            np.array(dones),
+            np.array(skills)
+        )
