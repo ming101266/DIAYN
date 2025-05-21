@@ -6,7 +6,6 @@ from discriminator import Discriminator
 from buffer import ReplayBuffer
 from train import train
 from critic import QNetwork
-from value import Value
 import numpy as np
 import copy
 
@@ -20,37 +19,32 @@ def main():
     tau = 0.005
     alpha = 0.1
     lr_policy = 1e-4
-    lr_disc = 3e-4
+    lr_disc = 1e-4
     lr_critic = 1e-4
-    lr_value = 3e-4
     total_steps = 10000
     target_entropy = -action_dim
-
 
     env = Point2DEnv()
     policy = Policy(state_dim, skill_dim, action_dim)
     discriminator = Discriminator(state_dim, num_skills)
     critic = QNetwork(state_dim, action_dim, skill_dim)
-    value = Value(state_dim, num_skills)
 
     critic_target = copy.deepcopy(critic)
-    value_target = copy.deepcopy(value)
 
 
     policy_optim = torch.optim.Adam(policy.parameters(), lr_policy)
     disc_optim = torch.optim.Adam(discriminator.parameters(), lr_disc)
     critic_optim = torch.optim.Adam(critic.parameters(), lr_critic)
-    value_optim = torch.optim.Adam(value.parameters(), lr_value)
 
 
 
     buffer = ReplayBuffer()
 
     skill_trajectories = train(
-        policy, discriminator, critic, value,
-        critic_target, value_target,
+        policy, discriminator, critic,
+        critic_target,
         env, num_skills, 
-        policy_optim, disc_optim, critic_optim, value_optim,
+        policy_optim, disc_optim, critic_optim, 
         gamma, tau, alpha, target_entropy,
         buffer, steps=total_steps
     )

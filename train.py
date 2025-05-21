@@ -8,13 +8,13 @@ def polyak_update(source_net, target_net, tau):
         target_param.data.copy_(tau * source_param.data + (1.0 - tau) * target_param.data)
 
 def train(
-        policy, discriminator, critic, value_net,
-        critic_target, value_net_target,
+        policy, discriminator, critic,
+        critic_target,
         env, num_skills,
-        optim_policy, optim_disc, optim_critic, optim_value,
+        optim_policy, optim_disc, optim_critic,
         gamma, tau, alpha, target_entropy,
         buffer, steps, batch_size=256, max_skill_steps=20,
-        temp=0.5, target_update_interval=2
+        target_update_interval=2
     ):
     log_alpha = torch.tensor(np.log(alpha), requires_grad=True)
     alpha_optim = torch.optim.Adam([log_alpha], lr=1e-4)
@@ -41,7 +41,7 @@ def train(
             # Intrinsic reward calculation
             with torch.no_grad():
                 next_state_tensor = to_tensor(next_state).unsqueeze(0)
-                disc_logits = discriminator(next_state_tensor) / temp
+                disc_logits = discriminator(next_state_tensor) / alpha
                 log_probs = F.log_softmax(disc_logits, dim=1)
                 intrinsic_reward = log_probs[0, skill].item() + np.log(num_skills)
 
@@ -72,25 +72,15 @@ def train(
         loss_disc.backward()
         optim_disc.step()
 
-        # 2. Value network update
-        with torch.no_grad():
-            next_actions, log_probs_next = policy.sample(next_states, skills_onehot)
-            q1_next, q2_next = critic_target(next_states, next_actions, skills_onehot)
-            min_q_next = torch.min(q1_next, q2_next)
-            v_target = min_q_next - log_alpha.exp().detach() * log_probs_next
-
-        v_pred = value_net(states, skills_onehot)
-        loss_value = F.mse_loss(v_pred, v_target)
-        optim_value.zero_grad()
-        loss_value.backward()
-        optim_value.step()
-
         # 3. Q-network update
         with torch.no_grad():
-            v_next = value_net_target(next_states, skills_onehot)
-            q_target = rewards + gamma * (1 - dones) * v_next
+            next_actions, log_prob = policy.sample(next_states, skills_onehot)
+            q1_next, q2_next = critic_target(next_states, skills_onehot, next_actions)
+            min_q_next = torch.min(q1_next, q2_next)
+            q_target = rewards + gamma * (1 - dones) * (min_q_next - alpha * log_prob)
 
-        q1_pred, q2_pred = critic(states, actions, skills_onehot)
+
+        q1_pred, q2_pred = critic(states, skills_onehot, actions)
         loss_q1 = F.mse_loss(q1_pred, q_target)
         loss_q2 = F.mse_loss(q2_pred, q_target)
         loss_q = loss_q1 + loss_q2
@@ -100,7 +90,7 @@ def train(
 
         # 4. Policy update
         new_actions, log_probs = policy.sample(states, skills_onehot)
-        q1_new, q2_new = critic(states, new_actions, skills_onehot)
+        q1_new, q2_new = critic(states, skills_onehot, new_actions)
         min_q_new = torch.min(q1_new, q2_new)
         policy_loss = (log_alpha.exp().detach() * log_probs - min_q_new).mean()
         optim_policy.zero_grad()
@@ -117,14 +107,12 @@ def train(
 
             # Target network updates
             polyak_update(critic, critic_target, tau)
-            polyak_update(value_net, value_net_target, tau)
 
         # Logging
         if step_idx % 100 == 0:
             print(f"Rollout {step_idx}/{steps}, "
                   f"Disc: {loss_disc.item():.3f}, "
                   f"Q: {loss_q.item():.3f}, "
-                  f"Value: {loss_value.item():.3f}, "
                   f"Policy: {policy_loss.item():.3f}, "
                   f"Alpha: {log_alpha.exp().item():.3f}")
 
