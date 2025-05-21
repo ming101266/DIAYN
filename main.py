@@ -17,7 +17,7 @@ def main():
     skill_dim = num_skills
     gamma = 0.99
     tau = 0.005
-    alpha = 0.1
+    alpha = 0.2
     lr_policy = 1e-4
     lr_disc = 1e-4
     lr_critic = 1e-4
