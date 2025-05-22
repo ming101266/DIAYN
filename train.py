@@ -20,12 +20,14 @@ def train(
     alpha_optim = torch.optim.Adam([log_alpha], lr=1e-4)
     
     skill_trajectories = [[] for _ in range(num_skills)]
+    final_skill = [[] for _ in range(num_skills)]
 
     for step_idx in range(steps):
         # Environment interaction
         skill = np.random.randint(0, num_skills)
         skill_onehot = one_hot(skill, num_skills)
         state = env.reset()
+        final_skill[skill] = []
         
         for t in range(max_skill_steps):
             state_tensor = to_tensor(state).unsqueeze(0)
@@ -47,6 +49,7 @@ def train(
 
             buffer.add((state, action, intrinsic_reward, next_state, float(done), skill))
             skill_trajectories[skill].append(next_state.copy())
+            final_skill[skill].append(next_state.copy())
             state = next_state
 
         # Training update
@@ -115,5 +118,6 @@ def train(
                   f"Q: {loss_q.item():.3f}, "
                   f"Policy: {policy_loss.item():.3f}, "
                   f"Alpha: {log_alpha.exp().item():.3f}")
-
-    return skill_trajectories
+            # debugging
+            print(discriminator(torch.Tensor([0, 0.2])).argmax())
+    return final_skill

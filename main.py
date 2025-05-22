@@ -21,7 +21,7 @@ def main():
     lr_policy = 1e-4
     lr_disc = 1e-4
     lr_critic = 1e-4
-    total_steps = 10000
+    total_steps = 1000
     target_entropy = -action_dim
 
     env = Point2DEnv()
@@ -49,7 +49,7 @@ def main():
         buffer, steps=total_steps
     )
 
-    # Plotting
+    # Plotting (final one now!)
     colors = plt.cm.get_cmap('tab10', num_skills)
     plt.figure(figsize=(8, 8))
     for i, traj in enumerate(skill_trajectories):
