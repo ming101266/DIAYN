@@ -120,4 +120,6 @@ def train(
                   f"Alpha: {log_alpha.exp().item():.3f}")
             # debugging
             print(discriminator(torch.Tensor([0, 0.2])).argmax())
+
+    # Access final stuff here!
     return final_skill
