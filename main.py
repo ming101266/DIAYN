@@ -8,12 +8,12 @@ from train import train
 from critic import QNetwork
 import numpy as np
 import copy
-
+import pickle
 def main():
     # Hyperparameters
     state_dim = 2
     action_dim = 2
-    num_skills = 10
+    num_skills = 2
     skill_dim = num_skills
     gamma = 0.99
     tau = 0.005
@@ -21,7 +21,7 @@ def main():
     lr_policy = 1e-4
     lr_disc = 1e-4
     lr_critic = 1e-4
-    total_steps = 1000
+    total_steps =1000
     target_entropy = -action_dim
 
     env = Point2DEnv()
@@ -48,7 +48,8 @@ def main():
         gamma, tau, alpha, target_entropy,
         buffer, steps=total_steps
     )
-
+    
+    torch.save(discriminator.state_dict(), "Models/discriminator_5_skill")
     # Plotting (final one now!)
     colors = plt.cm.get_cmap('tab10', num_skills)
     plt.figure(figsize=(8, 8))
