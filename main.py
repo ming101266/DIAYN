@@ -8,6 +8,7 @@ from train import train
 from critic import QNetwork
 import numpy as np
 import copy
+from modelFreeRoam import freeRoam
 
 def main():
     # Hyperparameters
@@ -25,6 +26,7 @@ def main():
     target_entropy = -action_dim
 
     env = Point2DEnv()
+    
     policy = Policy(state_dim, skill_dim, action_dim)
     discriminator = Discriminator(state_dim, num_skills)
     critic = QNetwork(state_dim, action_dim, skill_dim)
@@ -48,6 +50,7 @@ def main():
         gamma, tau, alpha, target_entropy,
         buffer, steps=total_steps
     )
+    freeRoam(policy, env, num_skills, total_steps=10000, max_skill_steps=20)
 
     # Plotting (final one now!)
     colors = plt.cm.get_cmap('tab10', num_skills)

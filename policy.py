@@ -21,6 +21,7 @@ class Policy(nn.Module):
             nn.ReLU(),
         )
 
+        #The same as having a final output layer of size
         self.mean = nn.Linear(hidden_dim, action_dim)
         self.log_std = nn.Linear(hidden_dim, action_dim)
 
