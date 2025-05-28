@@ -16,7 +16,7 @@ def main():
     # Hyperparameters
     state_dim = 2
     action_dim = 2
-    num_skills = 2
+    num_skills = 5
     skill_dim = num_skills
     gamma = 0.99
     tau = 0.005

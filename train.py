@@ -1,3 +1,4 @@
+import math
 import torch
 import torch.nn.functional as F
 from utils import one_hot, to_tensor
@@ -142,14 +143,26 @@ def train(
         # 4. Policy update
         pTracker.start("Policy Sampling")
 
-        new_actions, log_probs = policy.sample(states, skills_onehot)
+        # Sample actions from policy
+        new_actions, _ = policy.sample(states, skills_onehot)
+
         q1_new, q2_new = critic(states, skills_onehot, new_actions)
         min_q_new = torch.min(q1_new, q2_new)
 
-        policy_loss = (log_alpha.exp().detach() * log_probs - min_q_new).mean()
+        disc_logits = discriminator(states)
+        log_prob_z_given_s = F.log_softmax(disc_logits, dim=-1)
+
+        # Compute intrinsic reward: log q(z | s) - log p(z), where p(z) is uniform
+        log_p_z = -math.log(num_skills)
+        intrinsic_reward = log_prob_z_given_s[range(states.size(0)), skills] - log_p_z
+
+        # Maximize expected Q-value for the skill — equivalent to minimizing negative Q
+        policy_loss = -min_q_new.mean()
+        # Optimize policy
         optim_policy.zero_grad()
         policy_loss.backward()
         optim_policy.step()
+
 
         pTracker.end()
 
