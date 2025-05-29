@@ -127,7 +127,7 @@ def train(
             next_actions, log_prob = policy.sample(next_states, skills_onehot)
             q1_next, q2_next = critic_target(next_states, skills_onehot, next_actions)
             min_q_next = torch.min(q1_next, q2_next)
-            q_target = rewards + gamma * (1 - dones) * (min_q_next - alpha * log_prob)
+            q_target = intrinsic_reward + gamma * (1 - dones) * (min_q_next - alpha * log_prob)
 
 
         q1_pred, q2_pred = critic(states, skills_onehot, actions)
@@ -148,13 +148,6 @@ def train(
 
         q1_new, q2_new = critic(states, skills_onehot, new_actions)
         min_q_new = torch.min(q1_new, q2_new)
-
-        disc_logits = discriminator(states)
-        log_prob_z_given_s = F.log_softmax(disc_logits, dim=-1)
-
-        # Compute intrinsic reward: log q(z | s) - log p(z), where p(z) is uniform
-        log_p_z = -math.log(num_skills)
-        intrinsic_reward = log_prob_z_given_s[range(states.size(0)), skills] - log_p_z
 
         # Maximize expected Q-value for the skill — equivalent to minimizing negative Q
         policy_loss = -min_q_new.mean()
