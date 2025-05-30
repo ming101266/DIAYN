@@ -55,6 +55,7 @@ def train(
                 disc_logits = discriminator(next_state_tensor) / alpha
                 log_probs = F.log_softmax(disc_logits, dim=1)
                 intrinsic_reward = log_probs[0, skill].item() + np.log(num_skills)
+                intrinsic_reward = 0
 
             pTracker.end()
             #Update discriminator statistics

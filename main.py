@@ -24,7 +24,7 @@ def main():
     lr_policy = 1e-4
     lr_disc = 1e-4
     lr_critic = 1e-4
-    total_steps = 1000
+    total_steps = 2000
     target_entropy = -action_dim
 
     env = Point2DEnv()
