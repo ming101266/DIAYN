@@ -71,12 +71,12 @@ def train(
             continue
 
         # Sample batch
-        states, actions, rewards, next_states, dones, skills = buffer.sample(batch_size)
+        states, actions, intrinsic_rewards, next_states, dones, skills = buffer.sample(batch_size)
         
         # Convert to tensors
         states = to_tensor(states)
         actions = to_tensor(actions)
-        rewards = to_tensor(rewards).unsqueeze(1)
+        intrinsic_rewards = to_tensor(intrinsic_rewards).unsqueeze(1)
         next_states = to_tensor(next_states)
         dones = to_tensor(dones).unsqueeze(1)
         skills = torch.tensor(skills, dtype=torch.long)
@@ -103,7 +103,7 @@ def train(
 
             #This is the new bottleneck of the algorithm
             local_ids = batch_levina_bickel_id(states, knn_model)
-            rewards = rewards * (1-alpha) + to_tensor(local_ids).unsqueeze(1) * alpha  # Scale by alpha
+            rewards = intrinsic_reward * (1-alpha) + to_tensor(local_ids).unsqueeze(1) * alpha  # Scale by alpha
             #now rewards disciminability + state coverage, 
             pTracker.end()
         ####################################
@@ -127,7 +127,7 @@ def train(
             next_actions, log_prob = policy.sample(next_states, skills_onehot)
             q1_next, q2_next = critic_target(next_states, skills_onehot, next_actions)
             min_q_next = torch.min(q1_next, q2_next)
-            q_target = intrinsic_reward + gamma * (1 - dones) * (min_q_next - alpha * log_prob)
+            q_target = intrinsic_rewards + gamma * (1 - dones) * (min_q_next - alpha * log_prob)
 
 
         q1_pred, q2_pred = critic(states, skills_onehot, actions)
