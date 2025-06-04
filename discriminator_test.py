@@ -4,9 +4,9 @@ from discriminator import Discriminator
 
 state_dim = 2
 action_dim = 2
-num_skills = 2
+num_skills = 10
 disc = Discriminator(state_dim, num_skills)
-disc.load_state_dict(torch.load("Models\discriminator_5_skill", weights_only= True))
+disc.load_state_dict(torch.load("Models\discriminator_external_reward_on_disc", weights_only= True))
 
 X = [[-1 + 0.02 * i, -1 + 0.02 * j] for i in range(100) for j in range(100)]
 # Plotting (final one now!)

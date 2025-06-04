@@ -16,7 +16,7 @@ def main():
     # Hyperparameters
     state_dim = 2
     action_dim = 2
-    num_skills = 5
+    num_skills = 10
     skill_dim = num_skills
     gamma = 0.99
     tau = 0.005
@@ -24,7 +24,7 @@ def main():
     lr_policy = 1e-4
     lr_disc = 1e-4
     lr_critic = 1e-4
-    total_steps = 2000
+    total_steps = 5000
     target_entropy = -action_dim
 
     env = Point2DEnv()
@@ -54,7 +54,7 @@ def main():
     )
 
     freeRoam(policy, env, num_skills, total_steps=10000, max_skill_steps=20)
-    torch.save(discriminator.state_dict(), "Models/discriminator_5_skill")
+    torch.save(discriminator.state_dict(), "Models/discriminator_external_reward_on_disc")
     # Plotting (final one now!)
     colors = plt.cm.get_cmap('tab10', num_skills)
     plt.figure(figsize=(8, 8))

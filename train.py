@@ -29,6 +29,7 @@ def train(
     pTracker = performanceTracker(["Intrinsic Reward Calculation", "intrinsic reward calculation 2", "knn model calculation", "Discriminator Forward Pass", "Q-Value Calculation", "Policy Sampling"])
     discriminator_correct_classifications = 0
     discriminator_total_classifications = 0
+    skill_reward = [0] * num_skills
 
     for step_idx in range(steps):
         # Environment interaction
@@ -55,7 +56,7 @@ def train(
                 disc_logits = discriminator(next_state_tensor) / alpha
                 log_probs = F.log_softmax(disc_logits, dim=1)
                 intrinsic_reward = log_probs[0, skill].item() + np.log(num_skills)
-                intrinsic_reward = 0
+                skill_reward[skill] += 0.01 * (torch.sum(state_tensor) - skill_reward[skill])
 
             pTracker.end()
             #Update discriminator statistics
@@ -82,6 +83,7 @@ def train(
         dones = to_tensor(dones).unsqueeze(1)
         skills = torch.tensor(skills, dtype=torch.long)
         skills_onehot = one_hot(skills, num_skills).float()
+
 
         ####################################
         ###### #### WARNING #### ###########
@@ -116,7 +118,10 @@ def train(
         # 1. Discriminator update
         pTracker.start("Discriminator Forward Pass")
         disc_logits = discriminator(states)
-        loss_disc = F.cross_entropy(disc_logits, skills)
+        predictions = torch.argmax(disc_logits, dim = 1)
+        skill_rewards = torch.tensor(list(map(lambda skill : skill_reward[skill], predictions)))
+        loss_disc = F.cross_entropy(disc_logits, skills) + torch.mean(skill_rewards)
+
         optim_disc.zero_grad()
         loss_disc.backward()
         optim_disc.step()
